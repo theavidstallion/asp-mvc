@@ -1,0 +1,72 @@
+﻿@model IEnumerable<Auth.Models.AppLogs>
+@using Auth.Models
+
+@{
+    ViewData["Title"] = "Application Logs";
+}
+
+<h2 class="mt-4">@ViewData["Title"]</h2>
+<p class="text-muted">Detailed audit logs filtered by the application. Use the search bar to filter.</p>
+<hr />
+
+
+<div class="table-responsive">
+    <table class="table table-striped table-sm table-hover f-7" id="logsTable">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Level</th>
+                <th>Message</th>
+                <th>Exception (Full Trace)</th>
+                <th>Properties (Context)</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var log in Model)
+            {
+                var rowClass = log.Level switch
+                {
+                    "Error" => "table-danger",
+                    "Warning" => "table-warning",
+                    "Fatal" => "table-dark text-white",
+                    _ => ""
+                };
+
+                <tr class="@rowClass">
+                    <td>
+                        @log.TimeStamp.ToString("yyyy-MM-dd HH:mm:ss zzz")
+                    </td>
+
+                    <td><span class="badge bg-secondary">@log.Level</span></td>
+
+                    <td>@log.Message</td>
+
+                    <td>
+                        @if (!string.IsNullOrEmpty(log.Exception))
+                        {
+                            <span class="text-danger" title="@log.Exception">ERROR TRACE...</span>
+                        }
+                    </td>
+
+                    <td>
+                        @if (!string.IsNullOrEmpty(log.Properties))
+                        {
+                            <span title="@log.Properties">View Context</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <script>
+        // DataTable
+        let table = new DataTable('#logsTable', {
+            pageLength: 25,
+            order: [[0, 'desc']] 
+        });
+
+    </script>
+}

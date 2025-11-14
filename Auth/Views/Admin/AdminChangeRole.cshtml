@@ -1,0 +1,46 @@
+﻿@using Auth.Models;
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Mvc.Rendering;
+
+@inject UserManager<ApplicationUser> UserManager;
+@inject RoleManager<IdentityRole> RoleManager;
+
+
+@{
+    ViewData["Title"] = "Change Role for: " + ViewData["UserName"];
+    // Data from GET action
+    var userId = (string)ViewData["UserId"];
+    var allRoles = (List<string>)ViewData["AllRoles"];
+    var currentRole = (string)ViewData["CurrentRole"];
+}
+
+<h2>@ViewData["Title"]</h2>
+<hr />
+
+<div class="row">
+    <div class="col-md-4">
+        <p><strong>Current Role:</strong> @currentRole</p>
+
+        <!-- Form for AdminChangeRole POST Action -->
+        <form asp-action="AdminChangeRole" asp-controller="Admin" method="post">
+
+            <input type="hidden" name="targetUserId" value="@userId" />
+
+            <div class="form-group mb-3">
+                <label for="newRole">Select New Role</label>
+
+                @* DROPDOWN: Generates the HTML <select> element *@
+                <select id="newRole" name="newRole" class="form-select">
+                    @foreach (var role in allRoles)
+                    {
+                        // Set the current role as selected
+                        <option value="@role" selected="@(role == currentRole)">@role</option>
+                    }
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary mt-3">Save Role Change</button>
+            <a asp-action="UserManagement" class="btn btn-secondary mt-3">Cancel</a>
+        </form>
+    </div>
+</div>

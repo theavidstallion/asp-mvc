@@ -1,0 +1,64 @@
+﻿@model IEnumerable<Auth.Models.ApplicationUser>
+@using Auth.Models;
+
+
+@{
+    ViewData["Title"] = "User Management";
+    @inject UserManager<ApplicationUser> UserManager;
+}
+
+<h2>@ViewData["Title"]</h2>
+<p>Manage your users here.</p>
+<table class="table" id="managementTable">
+    <thead>
+        <tr>
+            <th>FirstName</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Previous Role</th>
+            <th>Role Changed By</th>
+            <th>Role Changed At</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model)
+        {
+            <tr>
+                <td>@user.FirstName</td>
+                <td>@user.Email</td>
+                <td>
+                    @{
+                        var roles = await UserManager.GetRolesAsync(user);
+                        @roles.First()
+                    }
+                </td>
+                <td>@(user.RoleChangedFrom ?? "N/A")</td>
+                <td>@(user.RoleChangedBy ?? "N/A")</td>
+                <td>@(user.RoleChangedDate?.ToString("g") ?? "N/A")</td>
+                <td>
+                    @* --- Delete Action Form --- *@
+                    <form asp-action="AdminDeleteUser" method="post" style="display:inline;" onsubmit="return confirm('WARNING: Are you sure you want to delete this user?');">
+                        <input type="hidden" name="targetUserId" value="@user.Id" />
+                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                    
+                    @* --- Change Role Action Form --- *@
+                    <a asp-action="AdminChangeRole" asp-route-targetUserId="@user.Id" class="btn btn-warning btn-sm">Change Role</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+
+
+@section Scripts {
+    <script>
+        // DataTable
+        let table = new DataTable('#managementTable', {
+            pageLength: 25,
+            order: [[2, 'asc']]
+        });
+    </script>
+}

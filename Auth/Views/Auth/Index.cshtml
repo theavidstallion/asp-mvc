@@ -1,0 +1,157 @@
+﻿@model Auth.Models.ApplicationUser
+@inject UserManager<ApplicationUser> UserManager
+
+@{
+    ViewData["Title"] = "My Profile";
+    var hasPassword = await UserManager.HasPasswordAsync(Model);
+}
+
+<h2>@ViewData["Title"]</h2>
+<hr />
+
+
+
+<div class="row">
+    <div class="col-md-6">
+
+        <form method="post" asp-action="Index">
+
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <!-- Contact -->
+            <h4>Contact Information</h4>
+
+            <div class="form-group mb-3">
+                <label asp-for="Email"></label>
+                <input asp-for="Email" class="form-control" readonly />
+                <small class="form-text text-muted">Email cannot be changed on this page.</small>
+            </div>
+            <div class="form-group mb-3">
+                <label asp-for="FirstName">First Name</label>
+                <input asp-for="FirstName" class="form-control" />
+                <span asp-validation-for="FirstName" class="text-danger"></span>
+            </div>
+            <div class="form-group mb-3">
+                <label asp-for="LastName">Last Name</label>
+                <input asp-for="LastName" class="form-control" />
+                <span asp-validation-for="LastName" class="text-danger"></span>
+            </div>
+            <div class="form-group mb-3">
+                <label asp-for="City"></label>
+                <input asp-for="City" class="form-control" />
+                <span asp-validation-for="City" class="text-danger"></span>
+            </div>
+            <div class="form-group mb-3">
+                <label asp-for="PhoneNumber"></label>
+                <input asp-for="PhoneNumber" class="form-control" />
+                <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+            </div>
+
+            <!-- Change Password -->
+            @{
+                @if (hasPassword) {
+
+                    <div class="form-group mb-3">
+                        <label asp-for="CurrentPassword"></label>
+                        <input asp-for="CurrentPassword" class="form-control" />
+                        <span asp-validation-for="CurrentPassword" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label asp-for="NewPassword"></label>
+                        <input asp-for="NewPassword" class="form-control" />
+                        <span asp-validation-for="NewPassword" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label asp-for="ConfirmNewPassword"></label>
+                        <input asp-for="ConfirmNewPassword" class="form-control" />
+                        <span asp-validation-for="ConfirmNewPassword" class="text-danger"></span>
+                    </div>
+                }
+            }
+
+            <button type="submit" class="btn btn-primary mt-3">Update Profile</button>
+            
+            <!-- Commented Delete Section -->
+            @* @{
+                @if (hasPassword) {
+                    <!-- Delete Account Section -->
+                    <div class="card border-danger mt-4">
+                        <div class="card-header bg-danger text-white">
+                            <h5>Delete Account</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text text-danger">
+                                **Warning:** Deleting your account is permanent and cannot be undone.
+                                Enter your current password above, then click the delete button.
+                            </p>
+
+                            <button type="submit"
+                                    formaction="@Url.Action("DeleteAccount", "Auth")"
+                                    class="btn btn-danger"
+                                    onclick="return confirm('Are you absolutely sure you want to delete your account? This cannot be undone.');">
+                                Delete My Account Permanently
+                            </button>
+                        </div>
+                    </div>
+                }
+            } *@
+
+        </form>
+
+        <!-- Commented Delete Section -->
+        @*
+        @if (!hasPassword)
+            {
+            <div class="row">
+                <div class="col-md-8">
+                    <!-- Added padding and margin classes to the card and its container -->
+                    <div class="card border-danger mt-5 shadow-sm">
+
+                        <div class="card-header bg-danger text-white p-3">
+                            <h5 class="mb-0">
+                                <i class="bi bi-trash-fill me-2"></i> Account Deletion (Social-linked)
+                            </h5>
+                        </div>
+
+                        <form asp-controller="Auth" asp-action="DeleteOAuthAccount" method="post">
+                            <div class="card-body">
+
+                                <p class="card-text text-danger">
+                                    <strong>Warning:</strong> This action is permanent and will delete your Social-linked account data from our system.
+                                </p>
+
+                                <p class="card-text">
+                                    To confirm deletion, please type the word **DELETE** in the box below.
+                                </p>
+
+                                <div class="form-group mb-3">
+                                    <input type="text"
+                                           id="ConfirmText"
+                                           name="confirmText"
+                                           class="form-control"
+                                           placeholder="Type DELETE to confirm"
+                                           aria-label="Confirm Deletion Text" />
+                                </div>
+
+                            </div> <!-- end card-body -->
+
+                            <div class="card-footer d-flex justify-content-end bg-light-subtle">
+                                <button type="submit"
+                                        class="btn btn-danger"
+                                        onclick="return confirm('Are you absolutely sure you want to delete your Social-linked account?');">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Delete Account Permanently
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            }
+            *@
+    </div>
+</div>
+
+<br />
+

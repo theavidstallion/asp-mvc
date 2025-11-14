@@ -1,0 +1,27 @@
+﻿@model Auth.Models.ApplicationUser
+
+@{
+    ViewData["Title"] = "Account Recovery";
+}
+
+<h2 class="mt-4">@ViewData["Title"]</h2>
+<p class="lead">
+    Enter your registered email address below. We will send a secure link to reset your password and reactivate your account.
+</p>
+<hr />
+
+<div class="row">
+    <div class="col-md-5">
+        <form asp-controller="Auth" asp-action="RecoverAccount" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="form-group mb-3">
+                <label asp-for="Email"></label>
+                <input asp-for="Email" class="form-control" readonly />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary mt-3">Send Recovery Link</button>
+        </form>
+    </div>
+</div>
