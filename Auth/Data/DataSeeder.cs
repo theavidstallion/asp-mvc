@@ -11,6 +11,7 @@ namespace Auth.Data
         private const string UserRole = "User";
         private const string AdminPhoneNumber = "+1234567890";
         private const string AuthMethod = "System";
+        private const string ProfilePicture = "/images/default-user.png";
 
 
         public static async Task InitializeAsync (
@@ -29,6 +30,7 @@ namespace Auth.Data
                 {
                     UserName = AdminEmail,
                     Email = AdminEmail,
+                    ProfilePictureUrl = ProfilePicture,
                     PhoneNumber = AdminPhoneNumber,
                     FirstName = "Administrator",
                     LastName = "N/A",

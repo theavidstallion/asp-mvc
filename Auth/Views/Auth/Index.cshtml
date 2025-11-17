@@ -3,6 +3,10 @@
 
 @{
     ViewData["Title"] = "My Profile";
+
+    // Determine the photo source: stored URL, or local default image
+    var photoUrl = Model.ProfilePictureUrl ?? "/images/default-user.png";
+
     var hasPassword = await UserManager.HasPasswordAsync(Model);
 }
 
@@ -14,9 +18,20 @@
 <div class="row">
     <div class="col-md-6">
 
-        <form method="post" asp-action="Index">
+        <form method="post" asp-action="Index" enctype="multipart/form-data">
 
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <!-- Profile Picture -->
+            <div>
+                <img src="@photoUrl" alt="Profile Picture" style="width: 150px; height: 150px;" />
+            </div>
+            <div class="form-group mb-3">
+                <label for="photo">Change Photo</label>
+                <input type="file" name="photo" class="form-control form-control-sm mb-2" accept="image/*" />
+            </div>
+
+
 
             <!-- Contact -->
             <h4>Contact Information</h4>
@@ -49,7 +64,8 @@
 
             <!-- Change Password -->
             @{
-                @if (hasPassword) {
+                @if (hasPassword)
+                {
 
                     <div class="form-group mb-3">
                         <label asp-for="CurrentPassword"></label>
@@ -72,86 +88,15 @@
             }
 
             <button type="submit" class="btn btn-primary mt-3">Update Profile</button>
-            
-            <!-- Commented Delete Section -->
-            @* @{
-                @if (hasPassword) {
-                    <!-- Delete Account Section -->
-                    <div class="card border-danger mt-4">
-                        <div class="card-header bg-danger text-white">
-                            <h5>Delete Account</h5>
-                        </div>
-                        <div class="card-body">
-                            <p class="card-text text-danger">
-                                **Warning:** Deleting your account is permanent and cannot be undone.
-                                Enter your current password above, then click the delete button.
-                            </p>
 
-                            <button type="submit"
-                                    formaction="@Url.Action("DeleteAccount", "Auth")"
-                                    class="btn btn-danger"
-                                    onclick="return confirm('Are you absolutely sure you want to delete your account? This cannot be undone.');">
-                                Delete My Account Permanently
-                            </button>
-                        </div>
-                    </div>
-                }
-            } *@
+
 
         </form>
 
-        <!-- Commented Delete Section -->
-        @*
-        @if (!hasPassword)
-            {
-            <div class="row">
-                <div class="col-md-8">
-                    <!-- Added padding and margin classes to the card and its container -->
-                    <div class="card border-danger mt-5 shadow-sm">
 
-                        <div class="card-header bg-danger text-white p-3">
-                            <h5 class="mb-0">
-                                <i class="bi bi-trash-fill me-2"></i> Account Deletion (Social-linked)
-                            </h5>
-                        </div>
-
-                        <form asp-controller="Auth" asp-action="DeleteOAuthAccount" method="post">
-                            <div class="card-body">
-
-                                <p class="card-text text-danger">
-                                    <strong>Warning:</strong> This action is permanent and will delete your Social-linked account data from our system.
-                                </p>
-
-                                <p class="card-text">
-                                    To confirm deletion, please type the word **DELETE** in the box below.
-                                </p>
-
-                                <div class="form-group mb-3">
-                                    <input type="text"
-                                           id="ConfirmText"
-                                           name="confirmText"
-                                           class="form-control"
-                                           placeholder="Type DELETE to confirm"
-                                           aria-label="Confirm Deletion Text" />
-                                </div>
-
-                            </div> <!-- end card-body -->
-
-                            <div class="card-footer d-flex justify-content-end bg-light-subtle">
-                                <button type="submit"
-                                        class="btn btn-danger"
-                                        onclick="return confirm('Are you absolutely sure you want to delete your Social-linked account?');">
-                                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Delete Account Permanently
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            }
-            *@
     </div>
 </div>
 
 <br />
+
 

@@ -7,6 +7,7 @@ using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using System.IO;
 
 namespace Auth.Controllers
 {
@@ -46,66 +47,80 @@ namespace Auth.Controllers
 
         [Authorize(Roles = "Admin,User")]
         [HttpPost]
-        public async Task<IActionResult> Index(ApplicationUser userModel)
+        public async Task<IActionResult> Index(ApplicationUser userModel, IFormFile photo)
         {
+            // Fetch the user
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) { return NotFound(); }
+
             try
             {
-                var user = await _userManager.GetUserAsync(User);
-                if (user == null) { return NotFound(); }
+                // --- 1. STUPID VALIDATION & CLEANUP (For future development, better use nullable properties in model) ---
 
-
-                // Remove validation errors for fields not used in this form
+                // Remove validation for transient fields not submitted on this form
                 ModelState.Remove(nameof(userModel.Password));
                 ModelState.Remove(nameof(userModel.ConfirmPassword));
                 ModelState.Remove(nameof(userModel.RememberMe));
                 ModelState.Remove(nameof(userModel.AuthMethod));
+                ModelState.Remove(nameof(photo));       // Damn thing, can alternatively set [BindNever] on the model property or set IFormFile as nullable
 
-                // Checking if user is changing Password
+                // Flag for detecting update intent
                 bool changingPassword = !string.IsNullOrEmpty(userModel.NewPassword);
 
-                // If not changing password, remove validation for optional fields
+                // Remove conditional validation errors for fields left blank when not changing password
                 if (!changingPassword)
                 {
                     ModelState.Remove(nameof(userModel.CurrentPassword));
                     ModelState.Remove(nameof(userModel.NewPassword));
                     ModelState.Remove(nameof(userModel.ConfirmNewPassword));
                 }
-                else
+                else if (string.IsNullOrEmpty(userModel.CurrentPassword))
                 {
-                    // If the user provided a NewPassword, validate CurrentPassword
-                    if (string.IsNullOrEmpty(userModel.CurrentPassword))
-                    {
-                        ModelState.AddModelError(nameof(userModel.CurrentPassword), "Current Password is required to change password.");
-                    }
+                    ModelState.AddModelError(nameof(userModel.CurrentPassword), "Current Password is required to change Ppassword.");
                 }
 
-                // Check if ANY errors exist (including format/required errors on Email/Phone)
+                // Check if ANY validation errors exist
                 if (!ModelState.IsValid)
                 {
+                    var errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+                    _logger.LogError("Model State failed. {Errors}", string.Join(", ", errors));
                     userModel.Email = user.Email;
+                    userModel.ProfilePictureUrl = user.ProfilePictureUrl;
+
+
                     return View(userModel);
                 }
 
                 bool profileUpdated = false;
+                bool phoneNumberChanged = false; // Flag to check for 'NoChangeMessage' at the end
 
-                // PHONE NUMBER UPDATE
 
-                // Duplication Check (if the number belongs to someone else)
-                var existingPhoneNumberCheck = await _userManager.Users.FirstOrDefaultAsync(u => u.PhoneNumber == userModel.PhoneNumber && u.Id != user.Id);
-                if (existingPhoneNumberCheck != null)
+                // --- 2. FILE UPLOAD & PICTURE URL UPDATE ---
+                if (photo != null && photo.Length > 0)
                 {
-                    var existingUserEmail = existingPhoneNumberCheck.Email;
-                    ModelState.AddModelError(nameof(userModel.PhoneNumber), "Phone number is already in use.");
-                    userModel.Email = user.Email;
-                    return View(userModel);
+                    var fileExtension = Path.GetExtension(photo.FileName);
+                    var fileName = $"{user.Id}_profile{fileExtension}";
+                    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "profiles");
+                    var filePath = Path.Combine(uploadPath, fileName);
+
+                    Directory.CreateDirectory(uploadPath);
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await photo.CopyToAsync(stream);
+                    }
+
+                    // Update the tracked entity's property
+                    user.ProfilePictureUrl = $"/images/profiles/{fileName}";
+                    profileUpdated = true;
                 }
 
-                // Execute phone update if value changed
+                // --- 3. PHONE NUMBER UPDATE (Requires SetPhoneNumberAsync) ---
                 var existingPhoneNumberFromDb = await _userManager.GetPhoneNumberAsync(user);
-                bool phoneNumberChanged = !string.Equals((userModel.PhoneNumber ?? string.Empty).Trim(), (existingPhoneNumberFromDb ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
+                phoneNumberChanged = !string.Equals((userModel.PhoneNumber ?? string.Empty).Trim(), (existingPhoneNumberFromDb ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
 
                 if (phoneNumberChanged)
                 {
+                    // SetPhoneNumberAsync is special: it commits the phone change immediately and MUST BE checked for success
                     var setPhoneResult = await _userManager.SetPhoneNumberAsync(user, userModel.PhoneNumber);
                     if (!setPhoneResult.Succeeded)
                     {
@@ -117,37 +132,29 @@ namespace Auth.Controllers
                 }
 
 
-                // Change First Name, Last Name, City if changed
+                _logger.LogInformation("Comparing names - DB: '{DbFirst}'/'{DbLast}'/'{DbCity}' vs Form: '{FormFirst}'/'{FormLast}'/'{FormCity}'",
+                user.FirstName, user.LastName, user.City,
+                userModel.FirstName, userModel.LastName, userModel.City);
+
+                // --- 4. NAME/CITY UPDATE (Simple Property Mapping) ---
                 if (user.FirstName != userModel.FirstName || user.LastName != userModel.LastName || user.City != userModel.City)
                 {
+                    _logger.LogInformation("Updating profile for user {UserEmail}: Name/City changed.", user.Email);
+                    // Update the tracked entity (no database call yet)
                     user.FirstName = userModel.FirstName;
                     user.LastName = userModel.LastName;
                     user.City = userModel.City;
-
-                    var updateUser = await _userManager.UpdateAsync(user);
-                    if (!updateUser.Succeeded)
-                    {
-                        ModelState.AddModelError(string.Empty, "Error updating profile information.");
-                        userModel.Email = user.Email;
-                        return View(userModel);
-                    }
                     profileUpdated = true;
                 }
 
 
-                // PASSWORD CHANGE LOGIC
-
+                // --- 5. PASSWORD CHANGE LOGIC (Requires ChangePasswordAsync) ---
                 if (changingPassword)
                 {
-                    // ChangePasswordAsync handles the security check
-                    var changePasswordResult = await _userManager.ChangePasswordAsync(
-                        user,
-                        userModel.CurrentPassword,
-                        userModel.NewPassword);
+                    var changePasswordResult = await _userManager.ChangePasswordAsync(user, userModel.CurrentPassword, userModel.NewPassword);
 
                     if (!changePasswordResult.Succeeded)
                     {
-                        // Show errors
                         foreach (var error in changePasswordResult.Errors)
                         {
                             ModelState.AddModelError(string.Empty, error.Description);
@@ -158,10 +165,20 @@ namespace Auth.Controllers
                     profileUpdated = true;
                 }
 
-                // Success/Failure Messages
-
+                // --- 6. FINAL COMMIT (Saves Name/City/Picture URL) ---
                 if (profileUpdated)
                 {
+                    // This final call saves all simple property changes (Name, City, ProfilePictureUrl) 
+                    // that were NOT saved by SetPhoneNumberAsync or ChangePasswordAsync.
+                    var updateResult = await _userManager.UpdateAsync(user);
+
+                    if (!updateResult.Succeeded)
+                    {
+                        ModelState.AddModelError(string.Empty, "Error saving final profile changes.");
+                        userModel.Email = user.Email;
+                        return View(userModel);
+                    }
+
                     await _signInManager.RefreshSignInAsync(user);
                     TempData["SuccessMessage"] = "Profile updated successfully! ✅";
                 }
@@ -172,15 +189,13 @@ namespace Auth.Controllers
             }
             catch (Exception ex)
             {
-                var user = await _userManager.GetUserAsync(User);
-                _logger.LogError("An exception occurred while updating profile for user {UserEmail}.", user.Email, ex.Message, ex.StackTrace);
+                // Log fatal error
+                _logger.LogError(ex, "An unhandled exception occurred while updating profile for user {UserEmail}.", user.Email);
                 throw;
             }
 
             return RedirectToAction("Index");
         }
-
-
 
 
         [HttpGet]
@@ -821,6 +836,7 @@ namespace Auth.Controllers
                 {
                     // Get primary claims needed for provisioning the local account
                     var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+                    var pictureClaim = info.Principal.FindFirstValue("picture") ?? info.Principal.FindFirstValue("avatar");
 
                     // Check if a local user already exists with this email but isn't linked to Google
                     var userByEmail = await _userManager.FindByEmailAsync(email);
@@ -832,6 +848,7 @@ namespace Auth.Controllers
                         {
                             UserName = email,
                             Email = email,
+                            ProfilePictureUrl = pictureClaim,
                             // Retrieve custom profile data from Google claims
                             FirstName = info.Principal.FindFirstValue(ClaimTypes.GivenName),
                             LastName = info.Principal.FindFirstValue(ClaimTypes.Surname),
@@ -895,6 +912,10 @@ namespace Auth.Controllers
             // The framework will handle setting the HTTP status code (403 Forbidden).
             return View();
         }
+
+
+        
+
 
     }
 }

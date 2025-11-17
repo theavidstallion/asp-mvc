@@ -1,44 +1,59 @@
-using Auth.Data;
+﻿using Auth.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Auth.Models;
-using Serilog; 
-using Serilog.Sinks.MSSqlServer; // Necessary for database sinking
+using Serilog;
+using Serilog.Sinks.MSSqlServer;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.IO;
 using Auth.Middleware;
+using Microsoft.Extensions.Hosting; // Required for environment variable access
 
-// --- STEP 1: CONFIGURE AND INITIALIZE SERILOG (Before Builder) ---
-// This enables logging for application startup itself.
+// --- STEP 1: CONFIGURE AND INITIALIZE SERILOG (Pre-Builder Setup) ---
 
+// Manually build configuration to ensure secrets are loaded early.
 var configuration = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.json")
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    // Add environment-specific settings
+    .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development"}.json", optional: true)
+    .AddEnvironmentVariables()
+    // CRITICAL: Manually load User Secrets for security (this finds the connection string)
+    .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true, reloadOnChange: true)
     .Build();
 
+// Retrieve the connection string from the fully built configuration object
 var connectionString = configuration.GetConnectionString("DefaultConnection");
 
 try
 {
     // Configure Serilog Logger
     Log.Logger = new LoggerConfiguration()
-        .ReadFrom.Configuration(configuration) // Reads LogLevel from appsettings.json
-        .Enrich.FromLogContext()              // Adds useful context to log entries
+        .ReadFrom.Configuration(configuration)
+        .Enrich.FromLogContext()
         .WriteTo.Console()
         .WriteTo.Debug()
-        .WriteTo.MSSqlServer(                 // Configure Database Sink
+        .WriteTo.MSSqlServer(             // Configure Database Sink
+                                          // ✅ FIX: Use the retrieved connectionString variable for the sink
             connectionString: connectionString,
             restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information,
-            sinkOptions: new MSSqlServerSinkOptions {
-                TableName = "AppLogs",             // Table name for logs
+            sinkOptions: new MSSqlServerSinkOptions
+            {
+                TableName = "AppLogs",
                 AutoCreateSqlTable = true
             })
         .CreateLogger();
 
     Log.Information("Starting web host build.");
+
     var builder = WebApplication.CreateBuilder(args);
+
+    // CRITICAL FIX: Clear existing configuration sources and use the one we manually built.
+    // This ensures that all services (including Serilog and Identity) use the configuration 
+    // object that successfully loaded your secrets.json.
+    builder.Configuration.AddConfiguration(configuration);
 
     // 2. Link Serilog to the hosting environment
     builder.Host.UseSerilog();
@@ -47,15 +62,15 @@ try
 
     // Register custom DbContext
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlServer(connectionString));
+        // ✅ FIX: Use the retrieved connectionString variable for EF Core
+        options.UseSqlServer(connectionString ?? throw new InvalidOperationException("DefaultConnection string is missing.")));
 
     // 3. Configure Identity (Users, Roles, and Stores)
     builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         options.SignIn.RequireConfirmedAccount = true;
-        // ... (Other password/user options go here) ...
     })
-    .AddEntityFrameworkStores<ApplicationDbContext>() // Links Identity to the database context
+    .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
     // 4. Configure Authentication Middleware and External Providers
@@ -106,6 +121,7 @@ try
 
     app.UseRouting();
 
+    // Custom Middleware
     app.UseRequestLogging();
 
     // Authentication and Authorization MUST run before MapControllerRoute

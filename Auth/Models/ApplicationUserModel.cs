@@ -84,5 +84,6 @@ namespace Auth.Models
 
         public DateTimeOffset? DeletedAt { get; set; } // When the user was deleted
 
+        public string? ProfilePictureUrl { get; set; } // URL to profile picture
     }
 }
