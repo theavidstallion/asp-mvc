@@ -1,15 +1,16 @@
 ﻿using Auth.Data;
+using Auth.Middleware;
+using Auth.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Auth.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting; // Required for environment variable access
 using Serilog;
 using Serilog.Sinks.MSSqlServer;
-using System.Reflection;
-using Microsoft.Extensions.Configuration;
 using System;
 using System.IO;
-using Auth.Middleware;
-using Microsoft.Extensions.Hosting; // Required for environment variable access
+using System.Reflection;
+using Microsoft.AspNetCore.Authentication;
 
 // --- STEP 1: CONFIGURE AND INITIALIZE SERILOG (Pre-Builder Setup) ---
 
@@ -82,6 +83,7 @@ try
             options.ClientId = builder.Configuration["Google:ClientId"] ?? throw new InvalidOperationException("Google ClientId not found.");
             options.ClientSecret = builder.Configuration["Google:ClientSecret"] ?? throw new InvalidOperationException("Google ClientSecret not found.");
             options.Scope.Add("profile");
+            options.ClaimActions.MapJsonKey("picture", "picture", "url");
         })
         .AddFacebook(options =>
         {
@@ -91,6 +93,34 @@ try
             options.Fields.Add("name");
             options.Fields.Add("first_name");
             options.Fields.Add("last_name");
+            options.Fields.Add("picture");
+            // *** Add the Events handler ***
+            options.Events = new Microsoft.AspNetCore.Authentication.OAuth.OAuthEvents
+            {
+                OnCreatingTicket = context =>
+                {
+                    // Facebook returns the picture as a complex JSON object:
+                    // { "picture": { "data": { "url": "..." } } }
+
+                    // Get the raw JSON response from the external provider
+                    var pictureJson = context.User.GetProperty("picture");
+
+                    // Navigate to the "url" property
+                    if (pictureJson.TryGetProperty("data", out var data) &&
+                        data.TryGetProperty("url", out var url))
+                    {
+                        string pictureUrl = url.GetString();
+
+                        if (!string.IsNullOrEmpty(pictureUrl))
+                        {
+                            // *** 3. Manually add the claim using a distinct name ***
+                            context.Identity.AddClaim(new System.Security.Claims.Claim("FacebookPicture", pictureUrl));
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                }
+            };
         });
 
     // 5. Configure Identity Cookie Paths (Access Denied / Login)
@@ -117,6 +147,7 @@ try
     }
 
     app.UseHttpsRedirection();
+
     app.UseStaticFiles();
 
     app.UseRouting();

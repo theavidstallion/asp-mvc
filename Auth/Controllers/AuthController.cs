@@ -62,7 +62,7 @@ namespace Auth.Controllers
                 ModelState.Remove(nameof(userModel.ConfirmPassword));
                 ModelState.Remove(nameof(userModel.RememberMe));
                 ModelState.Remove(nameof(userModel.AuthMethod));
-                ModelState.Remove(nameof(photo));       // Damn thing, can alternatively set [BindNever] on the model property or set IFormFile as nullable
+                ModelState.Remove(nameof(photo));       // Damn thing, can alternatively set [BindNever] on the property/parameter or set IFormFile as nullable
 
                 // Flag for detecting update intent
                 bool changingPassword = !string.IsNullOrEmpty(userModel.NewPassword);
@@ -795,6 +795,23 @@ namespace Auth.Controllers
 
                 if (result.Succeeded)
                 {
+
+                    var userByEmail = info.Principal.FindFirstValue(ClaimTypes.Email);
+                    var existingUser = await _userManager.FindByEmailAsync(userByEmail);
+
+                    if (existingUser != null)
+                    {
+                        var pictureClaim = info.Principal.FindFirstValue("picture") ?? info.Principal.FindFirstValue("FacebookPicture") ?? info.Principal.FindFirstValue("avatar");
+
+                        // Update profile picture if it's different or if user doesn't have one
+                        if (!string.IsNullOrEmpty(pictureClaim) && existingUser.ProfilePictureUrl != pictureClaim)
+                        {
+                            existingUser.ProfilePictureUrl = pictureClaim;
+                            await _userManager.UpdateAsync(existingUser);
+                            _logger.LogInformation("Updated profile picture for user {UserEmail} from {Provider}", userByEmail, info.LoginProvider);
+                        }
+                    }
+
                     // Success: User is returning and already linked. Redirect to the homepage.
                     TempData["SuccessMessage"] = $"Welcome back! Logged in with {info.LoginProvider}.";
                     return RedirectToAction("Index", "Home");
@@ -836,7 +853,7 @@ namespace Auth.Controllers
                 {
                     // Get primary claims needed for provisioning the local account
                     var email = info.Principal.FindFirstValue(ClaimTypes.Email);
-                    var pictureClaim = info.Principal.FindFirstValue("picture") ?? info.Principal.FindFirstValue("avatar");
+                    var pictureClaim = info.Principal.FindFirstValue("picture") ?? info.Principal.FindFirstValue("FacebookPicture") ?? info.Principal.FindFirstValue("avatar");
 
                     // Check if a local user already exists with this email but isn't linked to Google
                     var userByEmail = await _userManager.FindByEmailAsync(email);
@@ -854,7 +871,7 @@ namespace Auth.Controllers
                             LastName = info.Principal.FindFirstValue(ClaimTypes.Surname),
                             // PasswordHash will be null, making this a passwordless account
                             City = "Not Specified",
-                            PhoneNumber = "", // Can be updated later in profile
+                            PhoneNumber = "+1000000000", // Can be updated later in profile
                             AuthMethod = info.LoginProvider
                         };
 
